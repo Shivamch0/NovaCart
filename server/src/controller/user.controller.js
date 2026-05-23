@@ -2,10 +2,10 @@ import { User } from "../model/user.model.js";
 
 // Utils Import
 import { ApiResponse } from "../utils/apiResponse.js";
-import { asynHandler } from "../utils/asyncHandler.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 
-const registerUser = asynHandler(async (req, res) => {
+const registerUser = asyncHandler(async (req, res) => {
   const { userName, fullName, email, password } = req.body;
   if (!userName || !fullName || !email || !password) {
     throw new ApiError(400, "Fill all the fields...");
@@ -50,3 +50,5 @@ const registerUser = asynHandler(async (req, res) => {
         .cookie("refreshToken" , refreshToken , options)
         .json(new ApiResponse(200 , {user : createdUser } , "User Created Successfully..." ))
 });
+
+export { registerUser }
