@@ -5,6 +5,28 @@ import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 
+const generateAccessAndRefreshToken = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new ApiError(400, "User not found...");
+    }
+
+    const accessToken = generateAccessToken();
+    const refreshToken = generateRefreshToken();
+
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
+
+    return { accessToken, refreshToken };
+  } catch (error) {
+    throw new ApiError(
+      500,
+      `Something went wrong while generating access and refreshToken ${error}`,
+    );
+  }
+};
+
 const registerUser = asyncHandler(async (req, res) => {
   const { userName, fullName, email, password } = req.body;
   if (!userName || !fullName || !email || !password) {
@@ -26,15 +48,13 @@ const registerUser = asyncHandler(async (req, res) => {
     password,
   });
 
-  const accessToken = user.generateAccessToken();
-  const refreshToken = user.generateRefreshToken();
+  const { accessToken , refreshToken } = await generateAccessAndRefreshToken(user._id)
 
-  user.refreshToken = refreshToken;
-  await user.save({ validateBeforeSave: false });
-
-  const createdUser = await User.findById(user._id).select("-password -refreshToken");
-  if(!createdUser){
-    throw new ApiError(400 , "Something went wrong while creating user...")
+  const createdUser = await User.findById(user._id).select(
+    "-password -refreshToken",
+  );
+  if (!createdUser) {
+    throw new ApiError(400, "Something went wrong while creating user...");
   }
 
   const options = {
@@ -45,10 +65,17 @@ const registerUser = asyncHandler(async (req, res) => {
     maxAge: 7 * 24 * 60 * 60 * 1000,
   };
 
-  return res.status(200)
-        .cookie("accessToken" , accessToken , options)
-        .cookie("refreshToken" , refreshToken , options)
-        .json(new ApiResponse(200 , {user : createdUser } , "User Created Successfully..." ))
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        { user: createdUser },
+        "User Created Successfully...",
+      ),
+    );
 });
 
-export { registerUser }
+export { registerUser };
