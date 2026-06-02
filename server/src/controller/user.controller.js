@@ -12,8 +12,8 @@ const generateAccessAndRefreshToken = async (userId) => {
       throw new ApiError(400, "User not found...");
     }
 
-    const accessToken = generateAccessToken();
-    const refreshToken = generateRefreshToken();
+    const accessToken = await user.generateAccessToken();
+    const refreshToken = await user.generateRefreshToken();
 
     user.refreshToken = refreshToken;
     await user.save({ validateBeforeSave: false });
@@ -25,6 +25,14 @@ const generateAccessAndRefreshToken = async (userId) => {
       `Something went wrong while generating access and refreshToken ${error}`,
     );
   }
+};
+
+const options = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "Lax",
+  path: "/",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
 const registerUser = asyncHandler(async (req, res) => {
@@ -48,7 +56,9 @@ const registerUser = asyncHandler(async (req, res) => {
     password,
   });
 
-  const { accessToken , refreshToken } = await generateAccessAndRefreshToken(user._id)
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+    user._id,
+  );
 
   const createdUser = await User.findById(user._id).select(
     "-password -refreshToken",
@@ -56,14 +66,6 @@ const registerUser = asyncHandler(async (req, res) => {
   if (!createdUser) {
     throw new ApiError(400, "Something went wrong while creating user...");
   }
-
-  const options = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "Lax",
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  };
 
   return res
     .status(200)
@@ -78,4 +80,35 @@ const registerUser = asyncHandler(async (req, res) => {
     );
 });
 
-export { registerUser };
+const loginUser = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    throw new ApiError(400, "Fill all the fields...");
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new ApiError(
+      400,
+      "User with this email not found. Please registered first...",
+    );
+  }
+
+  const checkPassword = await user.isPasswordCorrect(password);
+  if (!checkPassword) {
+    throw new ApiError(400, "Incorrect Password...");
+  }
+
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken();
+
+  const loggedInUser = await User.findById(user._id).select(
+    " -password -refreshToken",
+  );
+
+  return res.status(200)
+          .cookie("accessToken" , accessToken , options)
+          .cookie("refreshToken" , refreshToken , options)
+          .json(new ApiResponse(200 , {user : loggedInUser} , "User loggedIn successfully..."))
+});
+
+export { registerUser, loginUser };
